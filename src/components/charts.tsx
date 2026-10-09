@@ -14,10 +14,16 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  BarChart,
+  Legend,
+  Scatter,
+  ScatterChart,
+  ZAxis,
+  LabelList,
 } from 'recharts'
-import type { ReportReason, ReportStatus } from '../api/types'
+import type { ReportReason, Role } from '../api/types'
 import type { TrendPoint } from '../lib/derive'
-import { C, REASON, STATUS, num } from '../lib/format'
+import { C, REASON, ROLE, num } from '../lib/format'
 import { AnimatedNumber, Dot } from './ui'
 
 // ── Tooltip ─────────────────────────────────────────────────────────────────
@@ -139,7 +145,7 @@ export function Sparkline({ values, color, bars = false }: { values: number[]; c
     const slot = w / values.length
     const bw = Math.max(1.5, Math.min(6, slot * 0.6))
     return (
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="spark" aria-hidden>
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="spark" aria-hidden>
         {values.map((v, i) => {
           const bh = v ? Math.max(3, (v / max) * (h - 4)) : 2
           return (
@@ -171,7 +177,7 @@ export function Sparkline({ values, color, bars = false }: { values: number[]; c
   }, '')
   const id = `sp${color.replace('#', '')}`
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="spark" aria-hidden>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="spark" aria-hidden>
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity={0.35} />
@@ -331,20 +337,28 @@ export function ReasonBubbles({
   )
 }
 
-// ── Status donut ────────────────────────────────────────────────────────────
+// ── Donut ───────────────────────────────────────────────────────────────────
 
-export function StatusDonut({ data }: { data: { status: ReportStatus; count: number }[] }) {
-  const total = data.reduce((a, d) => a + d.count, 0)
-  const rows = data.filter((d) => d.count > 0)
+export interface Slice {
+  key: string
+  label: string
+  color: string
+  count: number
+}
+
+export function Donut({ items, unit }: { items: Slice[]; unit: string }) {
+  const total = items.reduce((a, d) => a + d.count, 0)
+  const rows = items.filter((d) => d.count > 0)
+  const shown = rows.length ? rows : [{ key: 'none', label: '', color: 'rgba(255,255,255,.08)', count: 1 }]
   return (
     <div className="donut">
       <div className="donut-chart">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={rows.length ? rows : [{ status: 'DISMISSED', count: 1 }]}
+              data={shown}
               dataKey="count"
-              nameKey="status"
+              nameKey="label"
               innerRadius="68%"
               outerRadius="100%"
               paddingAngle={rows.length > 1 ? 4 : 0}
@@ -355,8 +369,8 @@ export function StatusDonut({ data }: { data: { status: ReportStatus; count: num
               animationDuration={1300}
               animationEasing="ease-out"
             >
-              {(rows.length ? rows : [{ status: 'DISMISSED' as ReportStatus, count: 1 }]).map((d) => (
-                <Cell key={d.status} fill={rows.length ? STATUS[d.status].color : 'rgba(255,255,255,.08)'} />
+              {shown.map((d) => (
+                <Cell key={d.key} fill={d.color} />
               ))}
             </Pie>
             {rows.length > 0 && (
@@ -364,12 +378,10 @@ export function StatusDonut({ data }: { data: { status: ReportStatus; count: num
                 content={({ active, payload }) => (
                   <GlassTip
                     active={active}
-                    payload={payload?.map((p) => ({
-                      name: STATUS[(p.payload as { status: ReportStatus }).status].label,
-                      value: p.value as number,
-                      color: STATUS[(p.payload as { status: ReportStatus }).status].color,
-                      dataKey: (p.payload as { status: ReportStatus }).status,
-                    }))}
+                    payload={payload?.map((p) => {
+                      const d = p.payload as Slice
+                      return { name: d.label, value: d.count, color: d.color, dataKey: d.key }
+                    })}
                   />
                 )}
               />
@@ -378,14 +390,14 @@ export function StatusDonut({ data }: { data: { status: ReportStatus; count: num
         </ResponsiveContainer>
         <div className="donut-center">
           <AnimatedNumber value={total} className="donut-total" />
-          <span>reports</span>
+          <span>{unit}</span>
         </div>
       </div>
       <ul className="legend">
-        {data.map((d) => (
-          <li key={d.status}>
-            <Dot color={STATUS[d.status].color} />
-            <span>{STATUS[d.status].label}</span>
+        {items.map((d) => (
+          <li key={d.key}>
+            <Dot color={d.color} />
+            <span>{d.label}</span>
             <b className="num">{num(d.count)}</b>
           </li>
         ))}
@@ -535,5 +547,180 @@ export function LiquidOrb({
       </svg>
       <div className="orb-center">{children}</div>
     </div>
+  )
+}
+
+// ── Columns (e.g. by weekday) ───────────────────────────────────────────────
+
+export function Columns({
+  data,
+  x,
+  y,
+  name,
+  color = C.sky,
+  domain,
+}: {
+  data: object[]
+  x: string
+  y: string
+  name: string
+  color?: string
+  domain?: [number, number]
+}) {
+  const id = `col${useId().replace(/:/g, '')}`
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 18, right: 4, left: -18, bottom: 0 }}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.95} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.25} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} stroke={C.grid} />
+        <XAxis dataKey={x} tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} />
+        <YAxis tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} width={44} domain={domain} allowDecimals={!!domain} />
+        <Tooltip content={<GlassTip />} cursor={{ fill: 'rgba(255,255,255,.04)' }} />
+        <Bar dataKey={y} name={name} fill={`url(#${id})`} radius={[10, 10, 4, 4]} maxBarSize={34} animationDuration={1200}>
+          <LabelList dataKey={y} position="top" fill="rgba(255,255,255,.7)" fontSize={11} formatter={(v: unknown) => (v === null || v === undefined || v === 0 ? '' : String(v))} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Stacked bars: report reasons split by who reported ──────────────────────
+
+export function ReasonRoleBars({ data }: { data: ({ label: string } & Record<Role, number>)[] }) {
+  const rows = data.filter((d) => d.student + d.parent + d.coach > 0)
+  const roles: Role[] = ['student', 'parent', 'coach']
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 12, left: 4, bottom: 0 }} barCategoryGap={8}>
+        <XAxis type="number" hide allowDecimals={false} />
+        <YAxis type="category" dataKey="label" width={112} tickLine={false} axisLine={false} tick={{ fill: 'rgba(255,255,255,.75)', fontSize: 12 }} />
+        <Tooltip content={<GlassTip />} cursor={{ fill: 'rgba(255,255,255,.04)' }} />
+        <Legend
+          verticalAlign="bottom"
+          iconType="circle"
+          iconSize={8}
+          formatter={(v: string) => <span style={{ color: 'rgba(255,255,255,.7)', fontSize: 12 }}>{v}</span>}
+        />
+        {roles.map((r, i) => (
+          <Bar
+            key={r}
+            dataKey={r}
+            name={ROLE[r].label}
+            stackId="a"
+            fill={ROLE[r].color}
+            radius={i === roles.length - 1 ? [0, 8, 8, 0] : [0, 0, 0, 0]}
+            animationDuration={1200}
+            animationBegin={i * 150}
+          />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Ranked horizontal bars ──────────────────────────────────────────────────
+
+export function RankBars({
+  data,
+  value,
+  name,
+  domain,
+  color,
+  format = (v) => String(v),
+}: {
+  data: { label: string; [k: string]: string | number | null }[]
+  value: string
+  name: string
+  domain?: [number, number]
+  color: (v: number) => string
+  format?: (v: number) => string
+}) {
+  const id = useId().replace(/:/g, '')
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, left: 4, bottom: 0 }} barCategoryGap={6}>
+        <defs>
+          {data.map((d, i) => {
+            const c = color(Number(d[value] ?? 0))
+            return (
+              <linearGradient key={i} id={`rb${id}${i}`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor={c} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={c} stopOpacity={0.95} />
+              </linearGradient>
+            )
+          })}
+        </defs>
+        <XAxis type="number" domain={domain ?? [0, 'auto']} hide />
+        <YAxis type="category" dataKey="label" width={120} tickLine={false} axisLine={false} tick={{ fill: 'rgba(255,255,255,.75)', fontSize: 12 }} />
+        <Tooltip content={<GlassTip />} cursor={{ fill: 'rgba(255,255,255,.04)' }} />
+        <Bar
+          dataKey={value}
+          name={name}
+          radius={[8, 8, 8, 8]}
+          background={{ fill: 'rgba(255,255,255,.04)', radius: 8 }}
+          animationDuration={1300}
+          label={{ position: 'right', fill: 'rgba(255,255,255,.85)', fontSize: 12, formatter: (v: unknown) => format(Number(v)) }}
+        >
+          {data.map((_, i) => (
+            <Cell key={i} fill={`url(#rb${id}${i})`} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Coach landscape: students vs. rating, bubble = number of ratings ────────
+
+export function CoachScatter({ data }: { data: { name: string; students: number; avg: number; ratings: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ScatterChart margin={{ top: 16, right: 18, left: -10, bottom: 4 }}>
+        <defs>
+          <radialGradient id="scatterBub" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stopColor="#fff" stopOpacity={0.6} />
+            <stop offset="25%" stopColor={C.accent} stopOpacity={0.6} />
+            <stop offset="100%" stopColor={C.sky} stopOpacity={0.3} />
+          </radialGradient>
+        </defs>
+        <CartesianGrid stroke={C.grid} />
+        <XAxis
+          type="number"
+          dataKey="students"
+          name="Students"
+          allowDecimals={false}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: C.sub, fontSize: 11 }}
+          label={{ value: 'Students', position: 'insideBottomRight', offset: -2, fill: C.sub, fontSize: 11 }}
+        />
+        <YAxis type="number" dataKey="avg" name="Avg rating" domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} width={44} />
+        <ZAxis type="number" dataKey="ratings" range={[90, 900]} name="Ratings" />
+        <Tooltip
+          cursor={{ strokeDasharray: '3 3', stroke: 'rgba(255,255,255,.2)' }}
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null
+            const d = payload[0].payload as { name: string; students: number; avg: number; ratings: number }
+            return (
+              <GlassTip
+                active
+                label={d.name}
+                payload={[
+                  { name: 'Avg rating', value: d.avg, color: C.amber, dataKey: 'a' },
+                  { name: 'Students', value: d.students, color: C.sky, dataKey: 's' },
+                  { name: 'Ratings', value: d.ratings, color: C.accent, dataKey: 'r' },
+                ]}
+              />
+            )
+          }}
+        />
+        <Scatter data={data} fill="url(#scatterBub)" stroke={C.accent} strokeOpacity={0.6} animationDuration={1300} />
+      </ScatterChart>
+    </ResponsiveContainer>
   )
 }

@@ -2,7 +2,6 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { Eye, EyeOff, Lock, LogIn, Mail, Phone, User, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { requestPasswordReset, signIn } from '../api/client'
-import { DEMO, demoMe, demoSession } from '../api/demo'
 import type { Me } from '../api/types'
 import { Logo } from '../components/Icons'
 import { useToast } from '../components/Toast'
@@ -47,8 +46,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (me: Me) => void }) 
     }
     setBusy(true)
     try {
-      const me = DEMO ? (await new Promise((r) => setTimeout(r, 700)), demoMe) : await signIn(id, password)
-      if (DEMO) demoSession.set(true)
+      const me = await signIn(id, password)
       toast('Signed in')
       onSignedIn(me)
     } catch (err) {
@@ -195,7 +193,7 @@ function ResetDialog({ initial, onClose }: { initial: string; onClose: () => voi
     }
     setBusy(true)
     try {
-      if (!DEMO) await requestPasswordReset(v)
+      await requestPasswordReset(v)
       toast('We sent a verification code. Use the app to finish resetting.')
       onClose()
     } catch (err) {

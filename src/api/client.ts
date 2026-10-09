@@ -1,6 +1,7 @@
 import type {
   ChatMetric,
   CoachScore,
+  CoachStudents,
   Filters,
   Me,
   Paginated,
@@ -265,37 +266,78 @@ export async function requestPasswordReset(username: string): Promise<void> {
   })
 }
 
+export const STEPS = [
+  { key: 'sessions', label: 'Sessions' },
+  { key: 'chat', label: 'Chat activity' },
+  { key: 'coaches', label: 'Coach ratings' },
+  { key: 'students', label: 'Coach students' },
+  { key: 'scores', label: 'Session feedback' },
+  { key: 'reports', label: 'Issue reports' },
+] as const
+export type StepKey = (typeof STEPS)[number]['key']
+
+function rows<T>(page: Paginated<T> | T[]): T[] {
+  return Array.isArray(page) ? page : page.results
+}
+
 /**
- * Everything the dashboard shows, in five parallel calls. Comments, charts and
- * breakdowns are derived from these on the client, so nothing else is fetched
- * until the person refreshes or changes the filters.
+ * Everything the page shows, in six parallel calls. Every chart is derived from
+ * these on the client, so nothing else is fetched until the person refreshes or
+ * changes the filters. `onStep` fires as each call lands, to drive the progress UI.
  */
-export async function fetchSnapshot(filters: Filters): Promise<Snapshot> {
+export async function fetchSnapshot(filters: Filters, onStep?: (key: StepKey) => void): Promise<Snapshot> {
   const range = { date_from: filters.date_from, date_to: filters.date_to }
   const scoped = { ...range, coach: filters.coach }
+  const track = <T,>(key: StepKey, p: Promise<T>) =>
+    p.then((v) => {
+      onStep?.(key)
+      return v
+    })
 
-  const [sessions, chat, coaches, scores, reports] = await Promise.all([
-    request<SessionsMetric>(`/api/monitoring/panel/metrics/sessions/${query(scoped)}`),
-    request<ChatMetric>(`/api/monitoring/panel/metrics/chat-messages/${query(scoped)}`),
-    request<Paginated<CoachScore> | CoachScore[]>(
-      `/api/monitoring/panel/metrics/coach-scores/${query({ ...range, page_size: PAGE })}`,
+  const [sessions, chat, coaches, coachStudents, scores, reports] = await Promise.all([
+    track('sessions', request<SessionsMetric>(`/api/monitoring/panel/metrics/sessions/${query(scoped)}`)),
+    track('chat', request<ChatMetric>(`/api/monitoring/panel/metrics/chat-messages/${query(scoped)}`)),
+    track(
+      'coaches',
+      request<Paginated<CoachScore> | CoachScore[]>(
+        `/api/monitoring/panel/metrics/coach-scores/${query({ ...range, page_size: PAGE })}`,
+      ),
+    ),
+    track(
+      'students',
+      request<Paginated<CoachStudents> | CoachStudents[]>(
+        `/api/monitoring/panel/metrics/coach-students/${query({ ...scoped, page_size: PAGE })}`,
+      ),
     ),
     // Newest first when the server supports ordering; ignored otherwise.
-    request<Paginated<Record<string, unknown>>>(
-      `/api/monitoring/panel/scores/${query({ ...scoped, page_size: PAGE, ordering: '-created_date' })}`,
+    track(
+      'scores',
+      request<Paginated<Record<string, unknown>>>(
+        `/api/monitoring/panel/scores/${query({ ...scoped, page_size: PAGE, ordering: '-created_date' })}`,
+      ),
     ),
-    request<Paginated<Record<string, unknown>>>(
-      `/api/monitoring/panel/reports/${query({ ...scoped, page_size: PAGE, ordering: '-created_date' })}`,
+    track(
+      'reports',
+      request<Paginated<Record<string, unknown>>>(
+        `/api/monitoring/panel/reports/${query({ ...scoped, page_size: PAGE, ordering: '-created_date' })}`,
+      ),
     ),
   ])
 
-  const coachList = Array.isArray(coaches) ? coaches : coaches.results
   return {
     sessions,
     chat,
-    coaches: coachList.map((c) => ({
+    coaches: rows(coaches).map((c) => ({
       ...c,
-      average_score: c.average_score === null ? null : Number(c.average_score),
+      average_score: c.average_score === null || c.average_score === undefined ? null : Number(c.average_score),
+      score_count: Number(c.score_count ?? 0),
+    })),
+    coachStudents: rows(coachStudents).map((c) => ({
+      id: Number(c.id),
+      name: String(c.name ?? ''),
+      email: String(c.email ?? ''),
+      student_count: Number(c.student_count ?? c.students?.length ?? 0),
+      students: (c.students ?? []).map((p) => person(p) ?? { id: 0, name: 'Unknown' }),
     })),
     scores: scores.results.map(normScore).sort((a, b) => b.occurrence_start.localeCompare(a.occurrence_start)),
     scoresTotal: scores.count,
@@ -304,12 +346,4 @@ export async function fetchSnapshot(filters: Filters): Promise<Snapshot> {
     fetchedAt: Date.now(),
     filters,
   }
-}
-
-export async function triageReport(id: number, status: ReportStatus, resolution_note: string): Promise<ReportRow> {
-  const row = await request<Record<string, unknown>>(`/api/coaching/reports/${id}/`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status, resolution_note }),
-  })
-  return normReport(row ?? {})
 }

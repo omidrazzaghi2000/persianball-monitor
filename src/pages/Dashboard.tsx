@@ -1,4 +1,4 @@
-import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion'
+import { AnimatePresence, motion, useMotionValue, useScroll, useSpring, useTransform } from 'framer-motion'
 import { CalendarRange, ChevronDown, LogOut, RefreshCw, TriangleAlert, UserRound, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -6,23 +6,12 @@ import type { Me } from '../api/types'
 import { Logo } from '../components/Icons'
 import { useToast } from '../components/Toast'
 import { Avatar, Segmented, useEscape } from '../components/ui'
+import { StepNav, useActiveStep } from '../sections/StepNav'
 import { derive } from '../lib/derive'
 import { ago } from '../lib/format'
 import { presetRange, useSnapshot, type Preset } from '../lib/useSnapshot'
-import Coaches from '../sections/Coaches'
-import Feedback from '../sections/Feedback'
-import Overview from '../sections/Overview'
-import Reports from '../sections/Reports'
-import { DashboardSkeleton } from '../sections/Skeleton'
-
-export type Tab = 'overview' | 'feedback' | 'reports' | 'coaches'
-
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'feedback', label: 'Feedback' },
-  { value: 'reports', label: 'Reports' },
-  { value: 'coaches', label: 'Coaches' },
-]
+import Monitor, { SECTIONS } from '../sections/Monitor'
+import { LoadProgress, RefreshProgress } from '../sections/Progress'
 
 const PRESETS: { value: Preset; label: ReactNode }[] = [
   { value: '7d', label: '7D' },
@@ -34,9 +23,9 @@ const PRESETS: { value: Preset; label: ReactNode }[] = [
 
 export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   const toast = useToast()
-  const { data, loading, error, preset, filters, apply, refresh, patchReport } = useSnapshot()
+  const { data, loading, error, done, preset, filters, apply, refresh } = useSnapshot()
   const derived = useMemo(() => (data ? derive(data) : null), [data])
-  const [tab, setTab] = useState<Tab>('overview')
+  const active = useActiveStep(SECTIONS.map((s) => s.id), !!data)
   const [confirmOut, setConfirmOut] = useState(false)
   const [menu, setMenu] = useState(false)
   const [anchor, setAnchor] = useState({ top: 72, right: 24 })
@@ -61,8 +50,27 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
 
   const { scrollY } = useScroll()
   const barShadow = useTransform(scrollY, [0, 60], ['0 0 0 rgba(0,0,0,0)', '0 18px 40px -18px rgba(0,0,0,.7)'])
+  // Reading progress, re-measured whenever the page height changes (e.g. after data lands).
+  const progress = useMotionValue(0)
+  const readProgress = useSpring(progress, { stiffness: 140, damping: 26 })
+  useEffect(() => {
+    const measure = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      progress.set(max > 0 ? Math.min(1, window.scrollY / max) : 0)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(document.body)
+    window.addEventListener('scroll', measure, { passive: true })
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('scroll', measure)
+      window.removeEventListener('resize', measure)
+    }
+  }, [progress])
 
-  const coachName = data?.coaches.find((c) => c.id === filters.coach)?.name
+  const coachName = (data?.coaches.find((c) => c.id === filters.coach) ?? data?.coachStudents.find((c) => c.id === filters.coach))?.name
 
   function pickPreset(p: Preset) {
     if (p === 'custom') {
@@ -93,7 +101,6 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
 
   function focusCoach(id: number | null) {
     apply(preset, { ...filters, coach: id })
-    setTab('overview')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -115,8 +122,9 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
         </div>
 
         <nav className="tabs-desktop">
-          <Segmented id="tabs" value={tab} options={TABS} onChange={setTab} />
+          <StepNav id="steps" active={active} disabled={!data} />
         </nav>
+        <motion.span className="read-progress" style={{ scaleX: readProgress }} aria-hidden />
 
         <div className="top-actions">
           <span className="updated" title={data ? new Date(data.fetchedAt).toLocaleString() : ''}>
@@ -206,13 +214,13 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
       </motion.header>
 
       <nav className="tabs-mobile">
-        <Segmented id="tabs-m" value={tab} options={TABS} onChange={setTab} size="sm" />
+        <StepNav id="steps-m" active={active} disabled={!data} compact />
       </nav>
 
       <div className="filters">
         <div className="page-title">
-          <motion.h1 key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
-            {TABS.find((t) => t.value === tab)!.label}
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
+            Monitoring overview
           </motion.h1>
           <p>
             {rangeText(filters.date_from, filters.date_to)}
@@ -235,7 +243,7 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
             )}
           </AnimatePresence>
           <CoachSelect
-            coaches={data?.coaches ?? []}
+            coaches={data ? [...new Map([...data.coaches, ...data.coachStudents].map((c) => [c.id, c])).values()] : []}
             value={filters.coach}
             onChange={(id) => apply(preset, { ...filters, coach: id })}
           />
@@ -269,6 +277,8 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
         )}
       </AnimatePresence>
 
+      <AnimatePresence>{loading && data && <RefreshProgress done={done} />}</AnimatePresence>
+
       <main className="content">
         {!data || !derived ? (
           error && !loading ? (
@@ -281,24 +291,11 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
               </button>
             </div>
           ) : (
-            <DashboardSkeleton />
+            <LoadProgress done={done} />
           )
         ) : (
-          <motion.div className={loading ? 'is-refreshing' : ''} animate={{ opacity: loading ? 0.6 : 1 }} transition={{ duration: 0.3 }}>
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${tab}-${data.fetchedAt}`}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10, filter: 'blur(6px)' }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              >
-                {tab === 'overview' && <Overview data={data} d={derived} onTab={setTab} onCoach={focusCoach} />}
-                {tab === 'feedback' && <Feedback data={data} d={derived} />}
-                {tab === 'reports' && <Reports data={data} d={derived} onPatch={patchReport} />}
-                {tab === 'coaches' && <Coaches data={data} onCoach={focusCoach} />}
-              </motion.div>
-            </AnimatePresence>
+          <motion.div animate={{ opacity: loading ? 0.55 : 1 }} transition={{ duration: 0.3 }}>
+            <Monitor key={data.fetchedAt} data={data} d={derived} onCoach={focusCoach} />
           </motion.div>
         )}
       </main>

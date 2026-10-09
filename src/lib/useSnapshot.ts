@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchSnapshot } from '../api/client'
-import { DEMO, demoSnapshot } from '../api/demo'
-import type { Filters, ReportRow, Snapshot } from '../api/types'
+import { fetchSnapshot, type StepKey } from '../api/client'
+import type { Filters, Snapshot } from '../api/types'
 import { isoDay } from './format'
 
 export type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
 
-const CACHE_KEY = 'pbm.snapshot.v1'
+const CACHE_KEY = 'pbm.snapshot.v2'
 const PREFS_KEY = 'pbm.prefs.v1'
 
 export function presetRange(p: Preset): Pick<Filters, 'date_from' | 'date_to'> {
@@ -69,15 +68,18 @@ export function useSnapshot() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const salt = useRef(0)
+  const [done, setDone] = useState<StepKey[]>([])
   const inflight = useRef(0)
 
   const run = useCallback(async (f: Filters) => {
     const ticket = ++inflight.current
     setLoading(true)
     setError(null)
+    setDone([])
     try {
-      const snap = DEMO ? await demoSnapshot(f, salt.current++ % 3) : await fetchSnapshot(f)
+      const snap = await fetchSnapshot(f, (key) => {
+        if (ticket === inflight.current) setDone((d) => [...d, key])
+      })
       if (ticket !== inflight.current) return
       setData(snap)
       save(CACHE_KEY, snap, session)
@@ -111,17 +113,7 @@ export function useSnapshot() {
     else apply(preset, { ...filters, ...presetRange(preset) })
   }, [run, apply, preset, filters])
 
-  /** Apply a triage result locally instead of refetching everything. */
-  const patchReport = useCallback((id: number, patch: Partial<ReportRow>) => {
-    setData((d) => {
-      if (!d) return d
-      const next = { ...d, reports: d.reports.map((r) => (r.id === id ? { ...r, ...patch } : r)) }
-      save(CACHE_KEY, next, session)
-      return next
-    })
-  }, [])
-
-  return { data, loading, error, preset, filters, apply, refresh, patchReport }
+  return { data, loading, error, done, preset, filters, apply, refresh }
 }
 
 export function clearSnapshotCache() {

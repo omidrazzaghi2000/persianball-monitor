@@ -1,7 +1,6 @@
 import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { clearSession, storedMe } from './api/client'
-import { DEMO, demoSession } from './api/demo'
 import type { Me } from './api/types'
 import { ToastProvider } from './components/Toast'
 import { Backdrop } from './components/ui'
@@ -12,7 +11,7 @@ const loadDashboard = () => import('./pages/Dashboard')
 const Dashboard = lazy(loadDashboard)
 
 export default function App() {
-  const [me, setMe] = useState<Me | null>(() => (DEMO ? demoSession.get() : storedMe()))
+  const [me, setMe] = useState<Me | null>(() => storedMe())
 
   // Warm the dashboard bundle while the sign-in form is on screen.
   useEffect(() => {
@@ -29,7 +28,6 @@ export default function App() {
   function signOut() {
     clearSession()
     clearSnapshotCache()
-    demoSession.set(false)
     setMe(null)
   }
 

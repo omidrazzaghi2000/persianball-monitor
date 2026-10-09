@@ -83,6 +83,14 @@ export interface CoachScore {
   score_count: number
 }
 
+export interface CoachStudents {
+  id: number
+  name: string
+  email: string
+  student_count: number
+  students: Person[]
+}
+
 export interface Me {
   name: string
   email: string
@@ -101,6 +109,7 @@ export interface Snapshot {
   sessions: SessionsMetric
   chat: ChatMetric
   coaches: CoachScore[]
+  coachStudents: CoachStudents[]
   scores: ScoreRow[]
   scoresTotal: number
   reports: ReportRow[]

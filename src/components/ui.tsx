@@ -46,9 +46,10 @@ export function GlassCard({ children, index = 0, className = '', style, ...rest 
       style={style}
       onPointerMove={onMove}
       onPointerLeave={onLeave}
-      initial={reduce ? false : { opacity: 0, y: 26, scale: 0.97, filter: 'blur(8px)' }}
-      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
-      transition={{ ...softSpring, delay: 0.05 + index * 0.06 }}
+      initial={reduce ? false : { opacity: 0, y: 28, scale: 0.97, filter: 'blur(8px)' }}
+      whileInView={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
+      viewport={{ once: true, margin: '0px 0px -60px 0px' }}
+      transition={{ ...softSpring, delay: 0.04 + (index % 4) * 0.07 }}
       {...rest}
     >
       {children}

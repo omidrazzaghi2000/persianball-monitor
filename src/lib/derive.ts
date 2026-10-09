@@ -1,5 +1,5 @@
 import type { ReportReason, ReportRow, ReportStatus, Role, ScoreRow, Snapshot } from '../api/types'
-import { dateLabel, isoDay } from './format'
+import { REASON, dateLabel, isoDay } from './format'
 
 export interface TrendPoint {
   key: string
@@ -22,6 +22,21 @@ export interface Derived {
   resolutionRate: number | null
   cancelRate: number | null
   messagesPerSession: number | null
+  weekdays: { day: string; count: number; avg: number | null }[]
+  reasonRoles: ({ reason: ReportReason; label: string } & Record<Role, number>)[]
+  sessionTypes: { title: string; count: number; avg: number }[]
+  coachRows: CoachRow[]
+  studentsCovered: number
+  activeCoaches: number
+}
+
+export interface CoachRow {
+  id: number
+  name: string
+  email: string
+  avg: number | null
+  ratings: number
+  students: number
 }
 
 function startOfWeek(d: Date) {
@@ -141,5 +156,62 @@ export function derive(s: Snapshot): Derived {
     resolutionRate: reports.length ? closed / reports.length : null,
     cancelRate: s.sessions.total_count ? s.sessions.cancelled_count / s.sessions.total_count : null,
     messagesPerSession: s.sessions.count ? s.chat.count / s.sessions.count : null,
+    weekdays: weekdayStats(scores),
+    reasonRoles: reasonOrder.map((reason) => ({
+      reason,
+      label: REASON[reason].label,
+      student: reports.filter((r) => r.reason === reason && r.reporter_role === 'student').length,
+      parent: reports.filter((r) => r.reason === reason && r.reporter_role === 'parent').length,
+      coach: reports.filter((r) => r.reason === reason && r.reporter_role === 'coach').length,
+    })),
+    sessionTypes: sessionTypeStats(scores),
+    coachRows: coachRows(s),
+    studentsCovered: new Set(s.coachStudents.flatMap((c) => c.students.map((p) => p.id || p.name))).size ||
+      s.coachStudents.reduce((a, c) => a + c.student_count, 0),
+    activeCoaches: new Set([...s.coaches.map((c) => c.id), ...s.coachStudents.map((c) => c.id)]).size,
   }
+}
+
+const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function weekdayStats(scores: ScoreRow[]) {
+  const acc = WEEK.map((day) => ({ day, count: 0, sum: 0 }))
+  for (const r of scores) {
+    const d = new Date(r.occurrence_start)
+    if (Number.isNaN(d.getTime())) continue
+    const b = acc[(d.getDay() + 6) % 7]
+    b.count++
+    b.sum += r.score
+  }
+  return acc.map(({ day, count, sum }) => ({ day, count, avg: count ? Math.round((sum / count) * 100) / 100 : null }))
+}
+
+function sessionTypeStats(scores: ScoreRow[]) {
+  const m = new Map<string, { count: number; sum: number }>()
+  for (const r of scores) {
+    const k = r.event_title || 'Session'
+    const v = m.get(k) ?? { count: 0, sum: 0 }
+    v.count++
+    v.sum += r.score
+    m.set(k, v)
+  }
+  return [...m.entries()]
+    .map(([title, v]) => ({ title, count: v.count, avg: Math.round((v.sum / v.count) * 100) / 100 }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8)
+}
+
+/** One row per coach, joining ratings (coach-scores) with students (coach-students). */
+function coachRows(s: Snapshot): CoachRow[] {
+  const rows = new Map<number, CoachRow>()
+  for (const c of s.coaches) {
+    rows.set(c.id, { id: c.id, name: c.name, email: c.email, avg: c.average_score, ratings: c.score_count, students: 0 })
+  }
+  for (const c of s.coachStudents) {
+    const r = rows.get(c.id) ?? { id: c.id, name: c.name, email: c.email, avg: null, ratings: 0, students: 0 }
+    r.students = c.student_count
+    rows.set(c.id, r)
+  }
+  const list = [...rows.values()]
+  return s.filters.coach ? list.filter((r) => r.id === s.filters.coach) : list
 }
