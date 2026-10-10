@@ -6,7 +6,6 @@ import {
   Bar,
   Cell,
   ComposedChart,
-  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -16,13 +15,9 @@ import {
   CartesianGrid,
   BarChart,
   Legend,
-  Scatter,
-  ScatterChart,
-  ZAxis,
   LabelList,
 } from 'recharts'
 import type { ReportReason, Role } from '../api/types'
-import type { TrendPoint } from '../lib/derive'
 import { C, REASON, ROLE, num } from '../lib/format'
 import { AnimatedNumber, Dot } from './ui'
 
@@ -50,85 +45,6 @@ function GlassTip({ active, payload, label }: { active?: boolean; payload?: TipE
           </div>
         ))}
     </div>
-  )
-}
-
-// ── Activity trend ──────────────────────────────────────────────────────────
-
-export function TrendChart({ data, mode }: { data: TrendPoint[]; mode: 'volume' | 'quality' }) {
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 10, right: 4, left: -18, bottom: 0 }}>
-        <defs>
-          <linearGradient id="gFeedback" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={C.accent} stopOpacity={0.45} />
-            <stop offset="100%" stopColor={C.accent} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="gAvg" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={C.amber} />
-            <stop offset="100%" stopColor="#FF9F6B" />
-          </linearGradient>
-          <linearGradient id="gReports" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={C.red} stopOpacity={0.95} />
-            <stop offset="100%" stopColor={C.red} stopOpacity={0.35} />
-          </linearGradient>
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <CartesianGrid vertical={false} stroke={C.grid} />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} minTickGap={24} dy={6} />
-        <YAxis
-          yAxisId="l"
-          tickLine={false}
-          axisLine={false}
-          tick={{ fill: C.sub, fontSize: 11 }}
-          allowDecimals={false}
-          width={44}
-          domain={mode === 'quality' ? [1, 5] : [0, 'auto']}
-          ticks={mode === 'quality' ? [1, 2, 3, 4, 5] : undefined}
-        />
-        <Tooltip content={<GlassTip />} cursor={{ stroke: 'rgba(255,255,255,.14)', strokeWidth: 1 }} />
-        {mode === 'volume' ? (
-          <>
-            <Area
-              yAxisId="l"
-              type="monotone"
-              dataKey="feedback"
-              name="Feedback"
-              stroke={C.accent}
-              strokeWidth={2.5}
-              fill="url(#gFeedback)"
-              filter="url(#glow)"
-              animationDuration={1400}
-              animationEasing="ease-out"
-              activeDot={{ r: 5, fill: C.accent, stroke: '#08080F', strokeWidth: 2 }}
-            />
-            <Bar yAxisId="l" dataKey="reports" name="Reports" fill="url(#gReports)" radius={[6, 6, 2, 2]} maxBarSize={10} animationDuration={1200} />
-          </>
-        ) : (
-          <>
-            <Line
-              yAxisId="l"
-              type="monotone"
-              dataKey="avg"
-              name="Avg score"
-              stroke="url(#gAvg)"
-              strokeWidth={3}
-              dot={false}
-              connectNulls
-              filter="url(#glow)"
-              animationDuration={1400}
-              activeDot={{ r: 5, fill: C.amber, stroke: '#08080F', strokeWidth: 2 }}
-            />
-          </>
-        )}
-      </ComposedChart>
-    </ResponsiveContainer>
   )
 }
 
@@ -675,52 +591,67 @@ export function RankBars({
   )
 }
 
-// ── Coach landscape: students vs. rating, bubble = number of ratings ────────
+// ── Sign-ups vs. buyers, one point per day ──────────────────────────────────
 
-export function CoachScatter({ data }: { data: { name: string; students: number; avg: number; ratings: number }[] }) {
+export function SignupChart({ data }: { data: { label: string; registered: number; buyers: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ScatterChart margin={{ top: 16, right: 18, left: -10, bottom: 4 }}>
+      <ComposedChart data={data} margin={{ top: 10, right: 4, left: -18, bottom: 0 }}>
         <defs>
-          <radialGradient id="scatterBub" cx="35%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#fff" stopOpacity={0.6} />
-            <stop offset="25%" stopColor={C.accent} stopOpacity={0.6} />
-            <stop offset="100%" stopColor={C.sky} stopOpacity={0.3} />
-          </radialGradient>
+          <linearGradient id="gReg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={C.sky} stopOpacity={0.45} />
+            <stop offset="100%" stopColor={C.sky} stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="gBuy" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={C.accent} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={C.accent} stopOpacity={0} />
+          </linearGradient>
         </defs>
-        <CartesianGrid stroke={C.grid} />
-        <XAxis
-          type="number"
-          dataKey="students"
-          name="Students"
-          allowDecimals={false}
-          tickLine={false}
-          axisLine={false}
-          tick={{ fill: C.sub, fontSize: 11 }}
-          label={{ value: 'Students', position: 'insideBottomRight', offset: -2, fill: C.sub, fontSize: 11 }}
-        />
-        <YAxis type="number" dataKey="avg" name="Avg rating" domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} width={44} />
-        <ZAxis type="number" dataKey="ratings" range={[90, 900]} name="Ratings" />
-        <Tooltip
-          cursor={{ strokeDasharray: '3 3', stroke: 'rgba(255,255,255,.2)' }}
-          content={({ active, payload }) => {
-            if (!active || !payload?.length) return null
-            const d = payload[0].payload as { name: string; students: number; avg: number; ratings: number }
-            return (
-              <GlassTip
-                active
-                label={d.name}
-                payload={[
-                  { name: 'Avg rating', value: d.avg, color: C.amber, dataKey: 'a' },
-                  { name: 'Students', value: d.students, color: C.sky, dataKey: 's' },
-                  { name: 'Ratings', value: d.ratings, color: C.accent, dataKey: 'r' },
-                ]}
-              />
-            )
-          }}
-        />
-        <Scatter data={data} fill="url(#scatterBub)" stroke={C.accent} strokeOpacity={0.6} animationDuration={1300} />
-      </ScatterChart>
+        <CartesianGrid vertical={false} stroke={C.grid} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} minTickGap={24} dy={6} />
+        <YAxis tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} allowDecimals={false} width={44} />
+        <Tooltip content={<GlassTip />} cursor={{ stroke: 'rgba(255,255,255,.14)', strokeWidth: 1 }} />
+        <Area type="monotone" dataKey="registered" name="New users" stroke={C.sky} strokeWidth={2.5} fill="url(#gReg)" animationDuration={1400}
+          activeDot={{ r: 5, fill: C.sky, stroke: '#08080F', strokeWidth: 2 }} />
+        <Area type="monotone" dataKey="buyers" name="Buyers" stroke={C.accent} strokeWidth={2.5} fill="url(#gBuy)" animationDuration={1400} animationBegin={200}
+          activeDot={{ r: 5, fill: C.accent, stroke: '#08080F', strokeWidth: 2 }} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Stacked monthly columns (held + cancelled, answered + unanswered…) ──────
+
+export function StackColumns({
+  data,
+  x,
+  series,
+}: {
+  data: object[]
+  x: string
+  series: { key: string; name: string; color: string }[]
+}) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 18, right: 4, left: -18, bottom: 0 }}>
+        <CartesianGrid vertical={false} stroke={C.grid} />
+        <XAxis dataKey={x} tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} />
+        <YAxis tickLine={false} axisLine={false} tick={{ fill: C.sub, fontSize: 11 }} width={44} allowDecimals={false} />
+        <Tooltip content={<GlassTip />} cursor={{ fill: 'rgba(255,255,255,.04)' }} />
+        {series.map((s, i) => (
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            name={s.name}
+            stackId="s"
+            fill={s.color}
+            maxBarSize={40}
+            radius={i === series.length - 1 ? [10, 10, 0, 0] : [0, 0, 4, 4]}
+            animationDuration={1200}
+            animationBegin={i * 150}
+          />
+        ))}
+      </BarChart>
     </ResponsiveContainer>
   )
 }

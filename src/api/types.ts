@@ -102,18 +102,62 @@ export interface Me {
 export interface Filters {
   date_from: string | null
   date_to: string | null
-  coach: number | null
 }
 
 export interface Snapshot {
   sessions: SessionsMetric
   chat: ChatMetric
-  coaches: CoachScore[]
   coachStudents: CoachStudents[]
-  scores: ScoreRow[]
-  scoresTotal: number
   reports: ReportRow[]
   reportsTotal: number
+  /** null until the backend ships the endpoint. */
+  users: UserMetrics | null
+  chatStudents: ChatStudentsMetric | null
+  comments: CommentMetrics | null
   fetchedAt: number
   filters: Filters
+}
+
+// ── Metrics that need the new endpoints (see MONITORING_REQUESTS.md) ─────────
+
+export interface UserMetrics {
+  /** One row per day for the last 30 days. */
+  daily: { date: string; registered: number; buyers: number }[]
+  /** Sign-ups per platform within the same 30 days. */
+  platforms_period: { platform: string; count: number }[]
+  /** All registered users per platform, all time. */
+  platforms_total: { platform: string; count: number }[]
+  totals: { registered: number; buyers: number }
+}
+
+export interface ChatStudentsMetric {
+  count: number
+}
+
+export interface CommentMetrics {
+  monthly: { month: string; total: number; answered: number; unanswered: number }[]
+  totals: { total: number; answered: number; unanswered: number }
+}
+
+export interface CoachStudentChat {
+  student: Person
+  message_count: number
+  last_message_at: string | null
+}
+
+export interface CoachStudentWorkouts {
+  student: Person
+  assigned_count: number
+  last_assigned_at: string | null
+}
+
+/** Drill-down for one coach, loaded when a coach is picked. */
+export interface CoachDetail {
+  coachId: number
+  monthly: { month: string; label: string; sessions: number; cancelled: number }[]
+  perStudent: { student: Person; sessions: number; chats: number | null; lastChat: string | null; workouts: number | null; lastWorkout: string | null }[]
+  chatsAvailable: boolean
+  lastChatAvailable: boolean
+  workoutsAvailable: boolean
+  fetchedAt: number
 }

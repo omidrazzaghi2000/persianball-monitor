@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useMotionValue, useScroll, useSpring, useTransform } from 'framer-motion'
-import { CalendarRange, ChevronDown, LogOut, RefreshCw, TriangleAlert, UserRound, X } from 'lucide-react'
+import { CalendarRange, ChevronDown, LogOut, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Me } from '../api/types'
@@ -7,6 +7,8 @@ import { Logo } from '../components/Icons'
 import { useToast } from '../components/Toast'
 import { Avatar, Segmented, useEscape } from '../components/ui'
 import { StepNav, useActiveStep } from '../sections/StepNav'
+import { CoachPicker } from '../components/CoachPicker'
+import { useCoachDetail } from '../lib/useCoachDetail'
 import { derive } from '../lib/derive'
 import { ago } from '../lib/format'
 import { presetRange, useSnapshot, type Preset } from '../lib/useSnapshot'
@@ -21,11 +23,13 @@ const PRESETS: { value: Preset; label: ReactNode }[] = [
   { value: 'custom', label: <CalendarRange size={15} aria-label="Custom range" /> },
 ]
 
+const STEP_IDS = SECTIONS.map((s) => s.id)
+
 export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   const toast = useToast()
   const { data, loading, error, done, preset, filters, apply, refresh } = useSnapshot()
   const derived = useMemo(() => (data ? derive(data) : null), [data])
-  const active = useActiveStep(SECTIONS.map((s) => s.id), !!data)
+  const active = useActiveStep(STEP_IDS, !!data)
   const [confirmOut, setConfirmOut] = useState(false)
   const [menu, setMenu] = useState(false)
   const [anchor, setAnchor] = useState({ top: 72, right: 24 })
@@ -70,7 +74,8 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
     }
   }, [progress])
 
-  const coachName = (data?.coaches.find((c) => c.id === filters.coach) ?? data?.coachStudents.find((c) => c.id === filters.coach))?.name
+  const coach = useCoachDetail(data?.coachStudents ?? [], filters, data?.fetchedAt)
+  const selected = derived?.coachRoster.find((c) => c.id === coach.coachId) ?? null
 
   function pickPreset(p: Preset) {
     if (p === 'custom') {
@@ -99,10 +104,11 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
     apply('custom', { ...filters, date_from: range.from || null, date_to: range.to || null })
   }
 
-  function focusCoach(id: number | null) {
-    apply(preset, { ...filters, coach: id })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  function pickCoach(id: number) {
+    coach.pick(id)
+    document.getElementById('sessions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
 
   return (
     <motion.div
@@ -224,29 +230,10 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
           </motion.h1>
           <p>
             {rangeText(filters.date_from, filters.date_to)}
-            {coachName && <> · {coachName}</>}
           </p>
         </div>
         <div className="filter-controls">
-          <AnimatePresence>
-            {filters.coach && (
-              <motion.button
-                className="coach-pill"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => focusCoach(null)}
-                layout
-              >
-                <UserRound size={14} /> {coachName ?? 'Coach'} <X size={14} />
-              </motion.button>
-            )}
-          </AnimatePresence>
-          <CoachSelect
-            coaches={data ? [...new Map([...data.coaches, ...data.coachStudents].map((c) => [c.id, c])).values()] : []}
-            value={filters.coach}
-            onChange={(id) => apply(preset, { ...filters, coach: id })}
-          />
+          <CoachPicker coaches={derived?.coachRoster ?? []} value={coach.coachId} onChange={coach.pick} disabled={!data} />
           <Segmented id="range" value={customOpen ? 'custom' : preset} options={PRESETS} onChange={pickPreset} size="sm" />
         </div>
       </div>
@@ -295,7 +282,16 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
           )
         ) : (
           <motion.div animate={{ opacity: loading ? 0.55 : 1 }} transition={{ duration: 0.3 }}>
-            <Monitor key={data.fetchedAt} data={data} d={derived} onCoach={focusCoach} />
+            <Monitor
+              key={data.fetchedAt}
+              data={data}
+              d={derived}
+              coach={selected}
+              detail={coach.detail}
+              detailLoading={coach.loading}
+              detailError={coach.error}
+              onPick={pickCoach}
+            />
           </motion.div>
         )}
       </main>
@@ -340,31 +336,4 @@ function rangeText(from: string | null, to: string | null) {
   if (from && !to) return `${f(from)} – Today`
   if (!from && to) return `Until ${f(to)}`
   return `${f(from!)} – ${f(to!)}`
-}
-
-function CoachSelect({
-  coaches,
-  value,
-  onChange,
-}: {
-  coaches: { id: number; name: string }[]
-  value: number | null
-  onChange: (id: number | null) => void
-}) {
-  return (
-    <label className="select">
-      <UserRound size={15} />
-      <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} aria-label="Filter by coach">
-        <option value="">All coaches</option>
-        {[...coaches]
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-      </select>
-      <ChevronDown size={14} />
-    </label>
-  )
 }

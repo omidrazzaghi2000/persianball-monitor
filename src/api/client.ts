@@ -1,7 +1,12 @@
 import type {
   ChatMetric,
-  CoachScore,
+  ChatStudentsMetric,
+  CoachDetail,
+  CoachStudentChat,
+  CoachStudentWorkouts,
   CoachStudents,
+  CommentMetrics,
+  UserMetrics,
   Filters,
   Me,
   Paginated,
@@ -10,7 +15,6 @@ import type {
   ReportRow,
   ReportStatus,
   Role,
-  ScoreRow,
   SessionsMetric,
   Snapshot,
 } from './types'
@@ -177,24 +181,6 @@ function oneOf<T extends string>(v: unknown, allowed: T[], fallback: T): T {
   return allowed.includes(s) ? s : fallback
 }
 
-function normScore(r: Record<string, unknown>): ScoreRow {
-  return {
-    id: Number(r.id),
-    occurrence: Number(r.occurrence ?? r.occurrence_id ?? 0),
-    score: Number(r.score ?? 0),
-    comment: String(r.comment ?? ''),
-    author: person(r.author) ?? { id: 0, name: 'Unknown' },
-    author_role: role(r.author_role ?? r.role),
-    event_id: Number(r.event_id ?? 0),
-    event_title: String(r.event_title ?? 'Session'),
-    coach: person(r.coach, r.coach_id),
-    student: person(r.student, r.student_id),
-    occurrence_start: String(r.occurrence_start ?? r.created_date ?? ''),
-    occurrence_end: String(r.occurrence_end ?? ''),
-    created_date: String(r.created_date ?? r.occurrence_start ?? ''),
-  }
-}
-
 function normReport(r: Record<string, unknown>): ReportRow {
   return {
     id: Number(r.id),
@@ -267,12 +253,12 @@ export async function requestPasswordReset(username: string): Promise<void> {
 }
 
 export const STEPS = [
+  { key: 'users', label: 'New users' },
   { key: 'sessions', label: 'Sessions' },
   { key: 'chat', label: 'Chat activity' },
-  { key: 'coaches', label: 'Coach ratings' },
-  { key: 'students', label: 'Coach students' },
-  { key: 'scores', label: 'Session feedback' },
+  { key: 'students', label: 'Coaches & students' },
   { key: 'reports', label: 'Issue reports' },
+  { key: 'comments', label: 'App comments' },
 ] as const
 export type StepKey = (typeof STEPS)[number]['key']
 
@@ -281,57 +267,72 @@ function rows<T>(page: Paginated<T> | T[]): T[] {
 }
 
 /**
- * Everything the page shows, in six parallel calls. Every chart is derived from
- * these on the client, so nothing else is fetched until the person refreshes or
- * changes the filters. `onStep` fires as each call lands, to drive the progress UI.
+ * For endpoints the backend hasn't shipped yet: a 404 resolves to null so the
+ * page can show "coming soon" instead of failing. Other errors still throw.
+ */
+async function optional<T>(path: string): Promise<T | null> {
+  try {
+    return await request<T>(path)
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 405 || e.status === 501)) return null
+    throw e
+  }
+}
+
+const isoDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** The fixed 30-day window the user charts always use. */
+export function lastMonthRange() {
+  const to = new Date()
+  const from = new Date()
+  from.setDate(from.getDate() - 29)
+  return { date_from: isoDate(from), date_to: isoDate(to) }
+}
+
+/**
+ * Everything the page shows apart from the coach drill-down, in parallel.
+ * `onStep` fires as each part lands, to drive the progress UI.
  */
 export async function fetchSnapshot(filters: Filters, onStep?: (key: StepKey) => void): Promise<Snapshot> {
   const range = { date_from: filters.date_from, date_to: filters.date_to }
-  const scoped = { ...range, coach: filters.coach }
   const track = <T,>(key: StepKey, p: Promise<T>) =>
     p.then((v) => {
       onStep?.(key)
       return v
     })
 
-  const [sessions, chat, coaches, coachStudents, scores, reports] = await Promise.all([
-    track('sessions', request<SessionsMetric>(`/api/monitoring/panel/metrics/sessions/${query(scoped)}`)),
-    track('chat', request<ChatMetric>(`/api/monitoring/panel/metrics/chat-messages/${query(scoped)}`)),
+  const [users, sessions, [chat, chatStudents], coachStudents, reports, comments] = await Promise.all([
+    track('users', optional<UserMetrics>(`/api/monitoring/panel/metrics/users/${query(lastMonthRange())}`)),
+    track('sessions', request<SessionsMetric>(`/api/monitoring/panel/metrics/sessions/${query(range)}`)),
     track(
-      'coaches',
-      request<Paginated<CoachScore> | CoachScore[]>(
-        `/api/monitoring/panel/metrics/coach-scores/${query({ ...range, page_size: PAGE })}`,
-      ),
+      'chat',
+      Promise.all([
+        request<ChatMetric>(`/api/monitoring/panel/metrics/chat-messages/${query(range)}`),
+        optional<ChatStudentsMetric>(`/api/monitoring/panel/metrics/chat-students/${query(range)}`),
+      ]),
     ),
     track(
       'students',
       request<Paginated<CoachStudents> | CoachStudents[]>(
-        `/api/monitoring/panel/metrics/coach-students/${query({ ...scoped, page_size: PAGE })}`,
-      ),
-    ),
-    // Newest first when the server supports ordering; ignored otherwise.
-    track(
-      'scores',
-      request<Paginated<Record<string, unknown>>>(
-        `/api/monitoring/panel/scores/${query({ ...scoped, page_size: PAGE, ordering: '-created_date' })}`,
+        `/api/monitoring/panel/metrics/coach-students/${query({ ...range, page_size: PAGE })}`,
       ),
     ),
     track(
       'reports',
       request<Paginated<Record<string, unknown>>>(
-        `/api/monitoring/panel/reports/${query({ ...scoped, page_size: PAGE, ordering: '-created_date' })}`,
+        `/api/monitoring/panel/reports/${query({ ...range, page_size: PAGE, ordering: '-created_date' })}`,
       ),
     ),
+    track('comments', optional<CommentMetrics>(`/api/monitoring/panel/metrics/comments/${query({ months: 6 })}`)),
   ])
 
   return {
     sessions,
     chat,
-    coaches: rows(coaches).map((c) => ({
-      ...c,
-      average_score: c.average_score === null || c.average_score === undefined ? null : Number(c.average_score),
-      score_count: Number(c.score_count ?? 0),
-    })),
+    chatStudents,
+    users,
+    comments,
     coachStudents: rows(coachStudents).map((c) => ({
       id: Number(c.id),
       name: String(c.name ?? ''),
@@ -339,11 +340,96 @@ export async function fetchSnapshot(filters: Filters, onStep?: (key: StepKey) =>
       student_count: Number(c.student_count ?? c.students?.length ?? 0),
       students: (c.students ?? []).map((p) => person(p) ?? { id: 0, name: 'Unknown' }),
     })),
-    scores: scores.results.map(normScore).sort((a, b) => b.occurrence_start.localeCompare(a.occurrence_start)),
-    scoresTotal: scores.count,
     reports: reports.results.map(normReport).sort((a, b) => b.created_date.localeCompare(a.created_date)),
     reportsTotal: reports.count,
     fetchedAt: Date.now(),
     filters,
+  }
+}
+
+/** Runs async jobs with at most `limit` in flight, so a large roster can't flood the server. */
+async function pool<T, R>(items: T[], limit: number, job: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await job(items[i])
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
+export const DETAIL_MONTHS = 6
+
+/**
+ * Drill-down for one coach: sessions in each of the last six months, plus
+ * sessions, chats and workouts per student in the selected period. Uses the
+ * per-student endpoints when the backend has them, otherwise counts per
+ * student with the existing metrics.
+ */
+export async function fetchCoachDetail(coachId: number, students: Person[], filters: Filters): Promise<CoachDetail> {
+  const range = { date_from: filters.date_from, date_to: filters.date_to }
+  const months = Array.from({ length: DETAIL_MONTHS }, (_, i) => {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() - (DETAIL_MONTHS - 1 - i))
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    return {
+      month: isoDate(d).slice(0, 7),
+      label: d.toLocaleDateString('en-US', { month: 'short' }),
+      date_from: isoDate(d),
+      date_to: isoDate(end),
+    }
+  })
+
+  const [monthly, chatRows, workoutRows] = await Promise.all([
+    pool(months, 4, async (m) => {
+      const r = await request<SessionsMetric>(
+        `/api/monitoring/panel/metrics/sessions/${query({ coach: coachId, date_from: m.date_from, date_to: m.date_to })}`,
+      )
+      return { month: m.month, label: m.label, sessions: r.count, cancelled: r.cancelled_count }
+    }),
+    optional<Paginated<CoachStudentChat> | CoachStudentChat[]>(
+      `/api/monitoring/panel/metrics/coach-chats/${query({ ...range, coach: coachId, page_size: PAGE })}`,
+    ),
+    optional<Paginated<CoachStudentWorkouts> | CoachStudentWorkouts[]>(
+      `/api/monitoring/panel/metrics/coach-workouts/${query({ ...range, coach: coachId, page_size: PAGE })}`,
+    ),
+  ])
+
+  const chats = chatRows ? rows(chatRows) : null
+  const workouts = workoutRows ? rows(workoutRows) : null
+  const chatOf = new Map(chats?.map((c) => [Number(c.student.id), c]))
+  const workOf = new Map(workouts?.map((w) => [Number(w.student.id), w]))
+
+  const perStudent = await pool(students, 4, async (st) => {
+    const [sess, chatCount] = await Promise.all([
+      request<SessionsMetric>(`/api/monitoring/panel/metrics/sessions/${query({ ...range, coach: coachId, student: st.id })}`),
+      chats
+        ? Promise.resolve(null)
+        : request<ChatMetric>(`/api/monitoring/panel/metrics/chat-messages/${query({ ...range, coach: coachId, student: st.id })}`),
+    ])
+    const c = chatOf.get(st.id)
+    const w = workOf.get(st.id)
+    return {
+      student: st,
+      sessions: sess.count,
+      chats: c ? Number(c.message_count) : chatCount ? chatCount.count : chats ? 0 : null,
+      lastChat: c?.last_message_at ?? null,
+      workouts: w ? Number(w.assigned_count) : workouts ? 0 : null,
+      lastWorkout: w?.last_assigned_at ?? null,
+    }
+  })
+
+  return {
+    coachId,
+    monthly,
+    perStudent,
+    chatsAvailable: true,
+    lastChatAvailable: !!chats,
+    workoutsAvailable: !!workouts,
+    fetchedAt: Date.now(),
   }
 }

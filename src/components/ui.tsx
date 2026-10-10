@@ -218,3 +218,23 @@ export function Empty({ title, hint, icon }: { title: string; hint?: string; ico
     </motion.div>
   )
 }
+
+/** For charts whose server endpoint isn't live yet: a calm placeholder, never fake data. */
+export function ComingSoon({ what }: { what: string }) {
+  return (
+    <div className="soon">
+      <div className="soon-ghost" aria-hidden>
+        {[38, 62, 48, 80, 56, 70, 44].map((h, i) => (
+          <motion.i
+            key={i}
+            style={{ height: `${h}%` }}
+            animate={{ opacity: [0.25, 0.5, 0.25] }}
+            transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.18 }}
+          />
+        ))}
+      </div>
+      <span className="soon-badge">Coming soon</span>
+      <span className="soon-text">{what} will appear here once this data source is connected.</span>
+    </div>
+  )
+}

@@ -2,21 +2,34 @@ import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { SECTIONS } from './Monitor'
 
-/** Tracks which numbered step is in the middle of the viewport. */
+/** The step whose top has passed the upper third of the viewport. */
 export function useActiveStep(ids: readonly string[], ready: boolean) {
   const [active, setActive] = useState(ids[0])
   useEffect(() => {
     if (!ready) return
-    const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e)
-    const io = new IntersectionObserver(
-      (entries) => {
-        const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
-        if (hit) setActive(hit.target.id)
-      },
-      { rootMargin: '-30% 0px -60% 0px' },
-    )
-    els.forEach((e) => io.observe(e))
-    return () => io.disconnect()
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const line = window.innerHeight * 0.33
+        let current = ids[0]
+        for (const id of ids) {
+          const el = document.getElementById(id)
+          if (el && el.getBoundingClientRect().top <= line) current = id
+        }
+        // At the very bottom the last step wins even if it's short.
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) current = ids[ids.length - 1]
+        setActive(current)
+      })
+    }
+    measure()
+    window.addEventListener('scroll', measure, { passive: true })
+    window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', measure)
+      window.removeEventListener('resize', measure)
+    }
   }, [ids, ready])
   return active
 }

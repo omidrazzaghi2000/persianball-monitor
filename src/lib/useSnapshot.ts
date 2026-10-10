@@ -5,8 +5,8 @@ import { isoDay } from './format'
 
 export type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
 
-const CACHE_KEY = 'pbm.snapshot.v2'
-const PREFS_KEY = 'pbm.prefs.v1'
+const CACHE_KEY = 'pbm.snapshot.v3'
+const PREFS_KEY = 'pbm.prefs.v2'
 
 export function presetRange(p: Preset): Pick<Filters, 'date_from' | 'date_to'> {
   if (p === 'all' || p === 'custom') return { date_from: null, date_to: null }
@@ -60,7 +60,7 @@ export function useSnapshot() {
   const prefs = load<Prefs>(PREFS_KEY, local)
   const [preset, setPreset] = useState<Preset>(prefs?.preset ?? '30d')
   const [filters, setFilters] = useState<Filters>(
-    prefs?.filters ?? { ...presetRange('30d'), coach: null },
+    prefs?.filters ?? { ...presetRange('30d') },
   )
   const [data, setData] = useState<Snapshot | null>(() => {
     const cached = load<Snapshot>(CACHE_KEY, session)

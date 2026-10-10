@@ -1,9 +1,10 @@
 # PersianBall Monitor
 
-Single-page monitoring dashboard for PersianBall: sessions, chat activity,
-session ratings and comments, issue reports, and coach performance, laid out as
-six numbered steps (Snapshot, Sessions, Ratings, Reports, Coaches, Voices) with
-14 charts, all driven by live data from the backend. It uses the
+Single-page monitoring dashboard for PersianBall, laid out as five numbered steps
+(Snapshot, Sessions, Coaches, Reports, Comments): new users and buyers, platforms,
+sessions and chats per coach and student, workouts, reports and app comments. Every
+chart uses live data from the backend. Charts whose endpoint isn't on the server yet
+show "Coming soon" (see `MONITORING_REQUESTS.md`). It uses the
 same sign-in as the mobile app, and only support, staff, or superuser accounts
 can enter.
 
@@ -36,9 +37,10 @@ API's domain (for example at `/monitor/`) avoids that.
 The dashboard reads the server only when it has to:
 
 - On sign-in: one token request and one `user-info` request.
-- To load the dashboard: six requests in parallel (session metrics, chat
-  metrics, coach scores, coach students, scores, reports). A progress card shows
-  each one as it lands. Every chart is worked out in the browser from those six.
+- To load the page: six groups of requests in parallel (new users, sessions, chat,
+  coaches & students, reports, comments). A progress card ticks each one off.
+- Picking a coach loads that coach's drill-down (six monthly session counts plus one
+  count per student), four requests at a time. Each coach is cached for the period.
 - After that, nothing more is fetched until someone presses refresh or changes
   the date range or coach filter. There is no polling. The last result is kept
   for the browser tab, so reloading the page doesn't fetch again.
@@ -51,9 +53,8 @@ Endpoints are documented in `MONITORING_API.md` (backend repo):
 - `GET  /api/authentication/user-info/`
 - `GET  /api/monitoring/panel/metrics/sessions/`
 - `GET  /api/monitoring/panel/metrics/chat-messages/`
-- `GET  /api/monitoring/panel/metrics/coach-scores/`
 - `GET  /api/monitoring/panel/metrics/coach-students/`
-- `GET  /api/monitoring/panel/scores/`
+- New, see `MONITORING_REQUESTS.md`: `metrics/users/`, `metrics/chat-students/`, `metrics/coach-chats/`, `metrics/coach-workouts/`, `metrics/comments/`
 - `GET  /api/monitoring/panel/reports/`
 
 ## Structure
@@ -64,7 +65,7 @@ src/
   components/ glass cards, charts, segmented control, toasts
   lib/        formatting, derived metrics, data hook
   pages/      Login, Dashboard shell
-  sections/   Monitor (the six steps), step navigator, loading progress
+  sections/   Monitor (the five steps), step navigator, loading progress
 ```
 
 The earlier multi-tab version is kept under the git tag `crowded_version`.
