@@ -417,7 +417,6 @@ export async function fetchCoachDetail(coachId: number, students: Person[], filt
       student: st,
       sessions: sess.count,
       chats: c ? Number(c.message_count) : chatCount ? chatCount.count : chats ? 0 : null,
-      lastChat: c?.last_message_at ?? null,
       workouts: w ? Number(w.assigned_count) : workouts ? 0 : null,
       lastWorkout: w?.last_assigned_at ?? null,
     }
@@ -428,7 +427,6 @@ export async function fetchCoachDetail(coachId: number, students: Person[], filt
     monthly,
     perStudent,
     chatsAvailable: true,
-    lastChatAvailable: !!chats,
     workoutsAvailable: !!workouts,
     fetchedAt: Date.now(),
   }

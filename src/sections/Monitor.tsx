@@ -3,7 +3,6 @@ import {
   CalendarCheck2,
   Dumbbell,
   GraduationCap,
-  MessageCircleReply,
   MessagesSquare,
   ShoppingBag,
   Smartphone,
@@ -19,7 +18,7 @@ import type { CoachDetail, Snapshot } from '../api/types'
 import { Donut, RankBars, ReasonBubbles, ReasonRoleBars, Ring, SignupChart, StackColumns } from '../components/charts'
 import { AnimatedNumber, Avatar, CardHeader, ComingSoon, Dot, Empty, GlassCard } from '../components/ui'
 import type { Derived } from '../lib/derive'
-import { C, REASON, STATUS, ago, dateTime, num } from '../lib/format'
+import { C, REASON, STATUS, num } from '../lib/format'
 
 export const SECTIONS = [
   { id: 'snapshot', title: 'Snapshot', caption: 'New users, buyers, platforms and activity at a glance.' },
@@ -66,7 +65,6 @@ export default function Monitor({ data, d, coach, detail, detailLoading, detailE
     .map((s) => ({ label: s.student.name, workouts: s.workouts ?? 0 }))
   const totalChats = perStudent.reduce((a, s) => a + (s.chats ?? 0), 0)
   const totalWorkouts = perStudent.reduce((a, s) => a + (s.workouts ?? 0), 0)
-  const lastChat = perStudent.map((s) => s.lastChat).filter((x): x is string => !!x).sort().at(-1) ?? null
   const studentsChatting = perStudent.filter((s) => (s.chats ?? 0) > 0).length
   const pending = detailLoading && !detail
   const barsHeight = (n: number) => Math.max(200, n * 36)
@@ -191,7 +189,6 @@ export default function Monitor({ data, d, coach, detail, detailLoading, detailE
                 <HeroStat icon={<MessagesSquare size={16} />} label="Chat messages" value={pending ? null : totalChats} />
                 <HeroStat icon={<Users size={16} />} label="Students chatting" value={pending ? null : studentsChatting} />
                 <HeroStat icon={<Dumbbell size={16} />} label="Workouts sent" value={pending || !detail?.workoutsAvailable ? null : totalWorkouts} soon={!!detail && !detail.workoutsAvailable} />
-                <HeroStat icon={<MessageCircleReply size={16} />} label="Last chat" text={pending ? '…' : lastChat ? ago(lastChat) : detail?.lastChatAvailable === false ? 'Soon' : '—'} />
               </div>
             </GlassCard>
           )}
@@ -207,21 +204,6 @@ export default function Monitor({ data, d, coach, detail, detailLoading, detailE
             </div>
           </GlassCard>
           <GlassCard index={2} className="span-6 tall">
-            <CardHeader title="Last chat with each student" caption="Most recent message in the conversation" />
-            {pending ? <Loading /> : detail && !detail.lastChatAvailable ? <ComingSoon what="Last chat dates" /> : perStudent.length ? (
-              <ul className="last-chats scroll-y">
-                {[...perStudent].sort((a, b) => (b.lastChat ?? '').localeCompare(a.lastChat ?? '')).map((s) => (
-                  <li key={s.student.id}>
-                    <Avatar name={s.student.name} seed={s.student.id} size={30} />
-                    <span className="lc-name"><strong>{s.student.name}</strong><span>{num(s.chats ?? 0)} messages</span></span>
-                    <span className={`lc-when ${s.lastChat ? '' : 'muted'}`}>{s.lastChat ? dateTime(s.lastChat) : 'No chat yet'}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : <Empty title="No students in this period" />}
-          </GlassCard>
-
-          <GlassCard index={3} className="span-6 tall">
             <CardHeader title="Workouts per student" caption={`Workouts ${coachName} assigned to each student`} />
             {pending ? <Loading /> : detail && !detail.workoutsAvailable ? <ComingSoon what="Workouts sent per student" /> : (
               <div className="chart-box scroll-y" style={{ maxHeight: 380 }}>
@@ -231,7 +213,7 @@ export default function Monitor({ data, d, coach, detail, detailLoading, detailE
               </div>
             )}
           </GlassCard>
-          <GlassCard index={4} className="span-6 tall">
+          <GlassCard index={3} className="span-6 tall">
             <CardHeader title="Students per coach" caption="All coaches · tap a bar’s coach below to switch" />
             <div className="chart-box scroll-y" style={{ maxHeight: 380 }}>
               <div style={{ height: barsHeight(d.coachRoster.length) }}>
@@ -242,7 +224,7 @@ export default function Monitor({ data, d, coach, detail, detailLoading, detailE
             </div>
           </GlassCard>
 
-          <GlassCard index={5} className="span-12">
+          <GlassCard index={4} className="span-12">
             <CardHeader title="All coaches" caption="Pick a coach to update every coach chart on this page" />
             <div className="roster">
               {d.coachRoster.map((c, i) => (

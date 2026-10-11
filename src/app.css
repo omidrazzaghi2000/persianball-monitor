@@ -512,20 +512,13 @@
 .coach-hero-id { min-width: 180px; }
 .coach-hero-id h3 { margin: 0; font-size: 22px; font-weight: 750; }
 .coach-hero-id span { color: var(--sub); font-size: 13px; }
-.coach-hero-stats { flex: 1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; min-width: 300px; }
+.coach-hero-stats { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 300px; }
 .hero-stat { padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .hero-label { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hero-label svg { flex: none; color: var(--accent); }
 .hero-value { font-size: 22px; font-weight: 750; letter-spacing: -.4px; white-space: nowrap; }
 .hero-value.muted { color: var(--label-4); font-size: 16px; }
 
-.last-chats { list-style: none; margin: 0; padding: 0; max-height: 330px; display: flex; flex-direction: column; gap: 4px; }
-.last-chats li { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 14px; transition: background .2s; }
-.last-chats li:hover { background: rgba(255,255,255,.05); }
-.lc-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.lc-name strong { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lc-name span { font-size: 12px; color: var(--sub); }
-.lc-when { font-size: 12.5px; color: var(--label-2); white-space: nowrap; }
 
 .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .roster-card { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px 14px; }

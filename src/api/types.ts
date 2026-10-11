@@ -155,9 +155,8 @@ export interface CoachStudentWorkouts {
 export interface CoachDetail {
   coachId: number
   monthly: { month: string; label: string; sessions: number; cancelled: number }[]
-  perStudent: { student: Person; sessions: number; chats: number | null; lastChat: string | null; workouts: number | null; lastWorkout: string | null }[]
+  perStudent: { student: Person; sessions: number; chats: number | null; workouts: number | null; lastWorkout: string | null }[]
   chatsAvailable: boolean
-  lastChatAvailable: boolean
   workoutsAvailable: boolean
   fetchedAt: number
 }
