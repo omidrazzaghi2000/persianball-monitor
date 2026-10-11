@@ -541,6 +541,9 @@ export function ReasonRoleBars({ data }: { data: ({ label: string } & Record<Rol
 
 // ── Ranked horizontal bars ──────────────────────────────────────────────────
 
+/** Phone-width viewport: give the bars more room by shrinking the label column. */
+const narrow = () => typeof window !== 'undefined' && window.innerWidth < 720
+
 export function RankBars({
   data,
   value,
@@ -572,7 +575,7 @@ export function RankBars({
           })}
         </defs>
         <XAxis type="number" domain={domain ?? [0, 'auto']} hide />
-        <YAxis type="category" dataKey="label" width={120} tickLine={false} axisLine={false} tick={{ fill: 'rgba(255,255,255,.75)', fontSize: 12 }} />
+        <YAxis type="category" dataKey="label" width={narrow() ? 92 : 120} tickLine={false} axisLine={false} tick={{ fill: 'rgba(255,255,255,.75)', fontSize: 12 }} />
         <Tooltip content={<GlassTip />} cursor={{ fill: 'rgba(255,255,255,.04)' }} />
         <Bar
           dataKey={value}

@@ -347,6 +347,27 @@ export async function fetchSnapshot(filters: Filters, onStep?: (key: StepKey) =>
   }
 }
 
+/**
+ * Support staff set a report's status and resolution note.
+ *
+ * The monitoring panel is read-only everywhere else; this is its one write.
+ * It deliberately does NOT live under /api/monitoring/ — the report table is
+ * owned by coaching, so the backend exposes the triage PATCH there.
+ *
+ * Returns the updated row, already normalised, so callers can swap it into
+ * their snapshot without refetching the whole list.
+ */
+export async function triageReport(
+  id: number,
+  patch: { status?: ReportStatus; resolution_note?: string },
+): Promise<ReportRow> {
+  const body = await request<Record<string, unknown>>(`/api/coaching/reports/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+  return normReport(body)
+}
+
 /** Runs async jobs with at most `limit` in flight, so a large roster can't flood the server. */
 async function pool<T, R>(items: T[], limit: number, job: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)
