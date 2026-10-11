@@ -347,6 +347,38 @@ export async function fetchSnapshot(filters: Filters, onStep?: (key: StepKey) =>
   }
 }
 
+/**
+ * Support staff set a report's status and resolution note.
+ *
+ * The monitoring panel is read-only everywhere else; this is its one write.
+ * It deliberately does NOT live under /api/monitoring/ — the report table is
+ * owned by coaching, so the backend exposes the triage PATCH there.
+ *
+ * The PATCH answers with the reporter's view of the report (status, note,
+ * handled_at — no reporter, session or people), so only those fields are
+ * taken from it and laid over [report]; callers swap the result into their
+ * snapshot without refetching the whole list.
+ */
+export async function triageReport(
+  report: ReportRow,
+  patch: { status?: ReportStatus; resolution_note?: string },
+): Promise<ReportRow> {
+  const body = await request<Record<string, unknown>>(`/api/coaching/reports/${report.id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+  const fresh = normReport(body ?? {})
+  return {
+    ...report,
+    status: body && 'status' in body ? fresh.status : (patch.status ?? report.status),
+    resolution_note:
+      body && 'resolution_note' in body ? fresh.resolution_note : (patch.resolution_note ?? report.resolution_note),
+    handled_at: fresh.handled_at ?? new Date().toISOString(),
+    // null when the PATCH doesn't say who — the caller knows: whoever is signed in.
+    handled_by: fresh.handled_by,
+  }
+}
+
 /** Runs async jobs with at most `limit` in flight, so a large roster can't flood the server. */
 async function pool<T, R>(items: T[], limit: number, job: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)

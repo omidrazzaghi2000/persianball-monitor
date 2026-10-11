@@ -27,7 +27,7 @@ const STEP_IDS = SECTIONS.map((s) => s.id)
 
 export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   const toast = useToast()
-  const { data, loading, error, done, preset, filters, apply, refresh } = useSnapshot()
+  const { data, loading, error, done, preset, filters, apply, refresh, patchReport } = useSnapshot()
   const derived = useMemo(() => (data ? derive(data) : null), [data])
   const active = useActiveStep(STEP_IDS, !!data)
   const [confirmOut, setConfirmOut] = useState(false)
@@ -291,6 +291,9 @@ export default function Dashboard({ me, onSignOut }: { me: Me; onSignOut: () => 
               detailLoading={coach.loading}
               detailError={coach.error}
               onPick={pickCoach}
+              onReportPatched={(row) =>
+                patchReport(row.handled_by ? row : { ...row, handled_by: { id: 0, name: me.name || me.email } })
+              }
             />
           </motion.div>
         )}
