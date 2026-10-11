@@ -142,14 +142,14 @@ function TriageSheet({
 
   return (
     <motion.div
-      className="sheet-scrim"
+      className="tsheet-scrim"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={saving ? undefined : onClose}
     >
       <motion.aside
-        className="sheet"
+        className="tsheet"
         initial={{ x: 40, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         exit={{ x: 40, opacity: 0 }}
@@ -158,7 +158,7 @@ function TriageSheet({
         role="dialog"
         aria-label="Report triage"
       >
-        <header className="sheet-head">
+        <header className="tsheet-head">
           <Chip color={REASON[report.reason].color}>{REASON[report.reason].label}</Chip>
           <h3>{report.event_title}</h3>
           <small>
@@ -167,7 +167,7 @@ function TriageSheet({
           </small>
         </header>
 
-        <dl className="sheet-facts">
+        <dl className="tsheet-facts">
           {report.coach && (
             <>
               <dt>Coach</dt>
@@ -192,29 +192,29 @@ function TriageSheet({
         </dl>
 
         {report.description && (
-          <blockquote className="sheet-quote">{report.description}</blockquote>
+          <blockquote className="tsheet-quote">{report.description}</blockquote>
         )}
 
-        <label className="sheet-label" htmlFor="triage-status">
+        <label className="tsheet-label" htmlFor="triage-status">
           Status
         </label>
         <Segmented id="triage-status" value={status} options={STATUS_OPTIONS} onChange={setStatus} />
 
-        <label className="sheet-label" htmlFor="triage-note">
+        <label className="tsheet-label" htmlFor="triage-note">
           Resolution note
         </label>
         <textarea
           id="triage-note"
-          className="sheet-note"
+          className="tsheet-note"
           rows={4}
           value={note}
           placeholder="What was done about this? The reporter does not see this note."
           onChange={(e) => setNote(e.target.value)}
         />
 
-        {error && <p className="sheet-error">{error}</p>}
+        {error && <p className="tsheet-error">{error}</p>}
 
-        <div className="sheet-actions">
+        <div className="tsheet-actions">
           <button className="btn ghost" onClick={onClose} disabled={saving}>
             Cancel
           </button>
