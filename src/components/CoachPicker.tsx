@@ -30,6 +30,9 @@ export function CoachPicker({
   const [anchor, setAnchor] = useState({ top: 0, left: 0, width: 300 })
   const btn = useRef<HTMLButtonElement>(null)
   const list = useRef<HTMLUListElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  // On touch devices autofocusing the search box pops the on-screen keyboard immediately.
+  const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
   const current = coaches.find((c) => c.id === value)
 
   const shown = useMemo(() => {
@@ -76,7 +79,11 @@ export function CoachPicker({
 
   useEffect(() => {
     if (!open) return
-    const close = () => setOpen(false)
+    // The on-screen keyboard opening fires resize (and on iOS a scroll); don't treat that as the user leaving.
+    const close = () => {
+      if (document.activeElement === search.current) return
+      setOpen(false)
+    }
     window.addEventListener('resize', close)
     window.addEventListener('scroll', close, { passive: true })
     return () => {
@@ -122,7 +129,8 @@ export function CoachPicker({
                 <label className="picker-search">
                   <Search size={15} />
                   <input
-                    autoFocus
+                    ref={search}
+                    autoFocus={!coarse}
                     placeholder="Search coaches"
                     value={q}
                     onChange={(e) => {
