@@ -14,11 +14,10 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { DETAIL_MONTHS } from '../api/client'
-import type { CoachDetail, ReportRow, Snapshot } from '../api/types'
+import type { CoachDetail, Snapshot } from '../api/types'
 import { Donut, RankBars, ReasonBubbles, ReasonRoleBars, Ring, SignupChart, StackColumns } from '../components/charts'
 import { AnimatedNumber, Avatar, CardHeader, ComingSoon, Dot, Empty, GlassCard } from '../components/ui'
 import type { Derived } from '../lib/derive'
-import ReportTriage from './ReportTriage'
 import { C, REASON, STATUS, num } from '../lib/format'
 
 export const SECTIONS = [
@@ -42,10 +41,9 @@ interface CoachProps {
   detailLoading: boolean
   detailError: string | null
   onPick: (id: number) => void
-  onReportPatched: (row: ReportRow) => void
 }
 
-export default function Monitor({ data, d, coach, detail, detailLoading, detailError, onPick, onReportPatched }: { data: Snapshot; d: Derived } & CoachProps) {
+export default function Monitor({ data, d, coach, detail, detailLoading, detailError, onPick }: { data: Snapshot; d: Derived } & CoachProps) {
   const users = data.users
   const coachName = coach?.name ?? 'this coach'
 
@@ -266,11 +264,6 @@ export default function Monitor({ data, d, coach, detail, detailLoading, detailE
           <GlassCard index={2} className="span-4 mid">
             <CardHeader title="Who reports what" caption="Reasons split by the reporter’s role" />
             <div className="chart-box">{data.reports.length ? <ReasonRoleBars data={d.reasonRoles} /> : <Empty title="No reports yet" />}</div>
-          </GlassCard>
-          {/* The charts say what is happening; this is where support acts on it. */}
-          <GlassCard index={3} className="span-12">
-            <CardHeader title="Triage queue" caption="Open a report to set its status and leave a resolution note" />
-            <ReportTriage reports={data.reports} onPatched={onReportPatched} />
           </GlassCard>
         </div>
       </Step>

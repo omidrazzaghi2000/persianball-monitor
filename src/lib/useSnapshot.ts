@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchSnapshot, type StepKey } from '../api/client'
-import type { Filters, ReportRow, Snapshot } from '../api/types'
+import type { Filters, Snapshot } from '../api/types'
 import { isoDay } from './format'
 
 export type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
@@ -107,32 +107,13 @@ export function useSnapshot() {
     [run],
   )
 
-  /**
-   * Swap one report in place after support triages it.
-   *
-   * Refetching the whole snapshot for a single status change would throw away
-   * the other five lists and make the page flash, so the updated row returned
-   * by the PATCH is merged into the cached snapshot instead.
-   */
-  const patchReport = useCallback((updated: ReportRow) => {
-    setData((prev) => {
-      if (!prev) return prev
-      const next = {
-        ...prev,
-        reports: prev.reports.map((r) => (r.id === updated.id ? updated : r)),
-      }
-      save(CACHE_KEY, next, session)
-      return next
-    })
-  }, [])
-
   // Relative presets ("last 30 days") are re-anchored to today on every refresh.
   const refresh = useCallback(() => {
     if (preset === 'custom') run(filters)
     else apply(preset, { ...filters, ...presetRange(preset) })
   }, [run, apply, preset, filters])
 
-  return { data, loading, error, done, preset, filters, apply, refresh, patchReport }
+  return { data, loading, error, done, preset, filters, apply, refresh }
 }
 
 export function clearSnapshotCache() {
